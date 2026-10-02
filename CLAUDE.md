@@ -4,25 +4,16 @@ Companion app for Muxy (github.com/muxy-app/muxy)
 
 ## Stack
 
-### Current
-
-- Expo, React Native, React
-- TypeScript
+- Swift, SwiftUI, SwiftTerm for iOS (ios/)
+- Kotlin, Jetpack Compose for Android (android/)
 
 ### Commands
 
-- `npm run typecheck` — `tsc --noEmit`
-- `npm run lint` — `expo lint`
-
-### New
-
-- Swift, SwiftTerm for iOS (ios-native/)
-- Kotlin for Android (android/)
-
-### Commands
-
-- `ios-native/scripts/run.sh test`
+- `ios/scripts/sdk.sh install`
+- `ios/scripts/run.sh test`
+- `android/scripts/sdk.sh install`
 - `android/scripts/run.sh test`
+- `android/scripts/checks.sh`
 
 ## API Docs
 

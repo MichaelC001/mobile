@@ -1,4 +1,4 @@
-name: Release iOS (React Native)
+name: Release iOS
 
 on:
   workflow_dispatch:
@@ -19,49 +19,63 @@ on:
       build_number:
         required: false
         type: string
+      sdk_version:
+        description: "SDK version resolved by the combined release workflow"
+        required: false
+        type: string
       skip_release_tag:
         description: "Skip the GitHub Release step (caller will create the tag)"
         required: false
         type: boolean
         default: false
+    outputs:
+      sdk_version:
+        description: "Muxy SDK release the app was built with"
+        value: ${{ jobs.release-ios.outputs.sdk_version }}
     secrets:
-      APP_STORE_CONNECT_API_KEY:
-        required: true
-      APP_STORE_CONNECT_KEY_ID:
-        required: true
-      APP_STORE_CONNECT_ISSUER_ID:
-        required: true
-      APPLE_TEAM_ID:
-        required: true
       APPLE_DISTRIBUTION_CERTIFICATE:
         required: true
       APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD:
         required: true
       KEYCHAIN_PASSWORD:
         required: true
+      APP_STORE_CONNECT_API_KEY:
+        required: true
+      APP_STORE_CONNECT_KEY_ID:
+        required: true
+      APP_STORE_CONNECT_ISSUER_ID:
+        required: true
       APP_STORE_PROVISIONING_PROFILE:
         required: true
+      APPLE_TEAM_ID:
+        required: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   release-ios:
     runs-on: macos-latest
     timeout-minutes: 60
     permissions:
-      contents: write
+      contents: read
+    concurrency:
+      group: ios-app-store-release
+      cancel-in-progress: false
     env:
       APP_SCHEME: Muxy
-      APP_WORKSPACE: ios/Muxy.xcworkspace
-      APP_ARCHIVE_PATH: build/Muxy.xcarchive
-      APP_EXPORT_PATH: build/export
+      APP_PROJECT: ios/Muxy.xcodeproj
+      APP_ARCHIVE_PATH: ios/build/Muxy.xcarchive
+      APP_EXPORT_PATH: ios/build/export
       BUNDLE_ID: com.muxy.app
     outputs:
       version: ${{ steps.validate.outputs.version }}
-      build_number: ${{ steps.validate.outputs.build_number }}
-      artifact_name: ${{ steps.validate.outputs.artifact_name }}
+      sdk_version: ${{ steps.sdk.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Select Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
@@ -95,40 +109,18 @@ jobs:
             echo "artifact_name=ios-release-$VERSION-$BUILD_NUMBER"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Set version in app.json
+      - name: Install Muxy SDK
+        id: sdk
         env:
-          VERSION: ${{ steps.validate.outputs.version }}
-          BUILD_NUMBER: ${{ steps.validate.outputs.build_number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_VERSION: ${{ inputs.sdk_version }}
         run: |
-          node -e '
-            const fs = require("fs");
-            const path = "app.json";
-            const cfg = JSON.parse(fs.readFileSync(path, "utf8"));
-            cfg.expo.version = process.env.VERSION;
-            cfg.expo.ios = cfg.expo.ios || {};
-            cfg.expo.ios.buildNumber = process.env.BUILD_NUMBER;
-            fs.writeFileSync(path, JSON.stringify(cfg, null, 2) + "\n");
-          '
-
-      - name: Expo prebuild
-        run: npx expo prebuild --platform ios --no-install --clean
-
-      - name: Install CocoaPods
-        run: npx pod-install@1.1.0 ios --non-interactive
-
-      - name: Pin Swift package resolution
-        run: |
-          mkdir -p ios/Muxy.xcworkspace/xcshareddata/swiftpm
-          cp modules/muxy-ssh/Package.resolved ios/Muxy.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          if [[ -z "$SDK_VERSION" ]]; then
+            SDK_VERSION=$(python3 scripts/lib/sdk_release.py)
+          fi
+          ios/scripts/sdk.sh pin "$SDK_VERSION"
+          SDK_VERSION=$(cat ios/MuxyMobileSDK/Build/REVISION)
+          echo "version=$SDK_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Import distribution certificate
         env:
@@ -153,18 +145,13 @@ jobs:
           rm "$CERTIFICATE_PATH"
 
       - name: Install App Store Connect API key
-        id: api_key
         env:
           API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
           KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
         run: |
           umask 077
-          KEY_DIRECTORY="$RUNNER_TEMP/private_keys"
-          KEY_PATH="$KEY_DIRECTORY/AuthKey_${KEY_ID}.p8"
-          mkdir -p "$KEY_DIRECTORY" "$HOME/.appstoreconnect/private_keys"
-          printf '%s\n' "$API_KEY" > "$KEY_PATH"
-          cp "$KEY_PATH" "$HOME/.appstoreconnect/private_keys/"
-          echo "path=$KEY_PATH" >> "$GITHUB_OUTPUT"
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s\n' "$API_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_${KEY_ID}.p8"
 
       - name: Install App Store provisioning profile
         id: profile
@@ -190,7 +177,7 @@ jobs:
           fi
 
           if [[ "$PROFILE_GET_TASK_ALLOW" == "true" ]]; then
-            echo "Error: provisioning profile '$PROFILE_NAME' is a development profile"
+            echo "Error: provisioning profile '$PROFILE_NAME' is a development profile. Use an App Store profile for $BUNDLE_ID."
             exit 1
           fi
 
@@ -216,6 +203,9 @@ jobs:
 
           if certificate_sha1 not in profile_certificate_hashes:
               print("Error: provisioning profile does not include the imported Apple Distribution certificate")
+              print(f"Imported certificate SHA-1: {certificate_sha1}")
+              for profile_hash in profile_certificate_hashes:
+                  print(f"Profile certificate SHA-1: {profile_hash}")
               sys.exit(1)
           PY
 
@@ -227,16 +217,21 @@ jobs:
       - name: Archive app
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_UUID: ${{ steps.profile.outputs.uuid }}
+          VERSION: ${{ steps.validate.outputs.version }}
+          BUILD_NUMBER: ${{ steps.validate.outputs.build_number }}
         run: |
           xcodebuild \
-            -workspace "$APP_WORKSPACE" \
+            -project "$APP_PROJECT" \
             -scheme "$APP_SCHEME" \
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath "$APP_ARCHIVE_PATH" \
             -disableAutomaticPackageResolution \
-            MUXY_DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            MUXY_PROVISIONING_PROFILE_SPECIFIER="${{ steps.profile.outputs.uuid }}" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            MUXY_PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             clean archive
 
       - name: Export IPA
@@ -244,7 +239,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           PROFILE_UUID: ${{ steps.profile.outputs.uuid }}
         run: |
-          cat > ExportOptions.plist <<EOF
+          EXPORT_OPTIONS="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$EXPORT_OPTIONS" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -274,7 +270,7 @@ jobs:
             -exportArchive \
             -archivePath "$APP_ARCHIVE_PATH" \
             -exportPath "$APP_EXPORT_PATH" \
-            -exportOptionsPlist ExportOptions.plist
+            -exportOptionsPlist "$EXPORT_OPTIONS"
 
       - name: Upload to App Store Connect
         env:
@@ -299,18 +295,33 @@ jobs:
         with:
           name: ${{ steps.validate.outputs.artifact_name }}
           path: |
-            build/Muxy.xcarchive
-            build/export/*.ipa
+            ios/build/Muxy.xcarchive
+            ios/build/export/*.ipa
           if-no-files-found: error
 
+  release-tag:
+    needs: release-ios
+    if: ${{ !inputs.skip_release_tag }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Create GitHub Release
-        if: ${{ !inputs.skip_release_tag }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.validate.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+          VERSION: ${{ needs.release-ios.outputs.version }}
+          SDK_VERSION: ${{ needs.release-ios.outputs.sdk_version }}
         run: |
           PREV_TAG=$(gh release list \
-            --repo "${{ github.repository }}" \
+            --repo "$REPOSITORY" \
             --limit 100 \
             --json tagName \
             -q '[.[] | select(.tagName | startswith("ios-v"))][0].tagName')
@@ -321,15 +332,17 @@ jobs:
             RANGE="HEAD"
           fi
 
-          git log --no-merges --format='- %s' "$RANGE" > notes.md
+          git log --no-merges --format='- %s' "$RANGE" -- ios ios-native > notes.md
 
           if [[ ! -s notes.md ]]; then
-            echo "- No changes since ${PREV_TAG:-initial release}" > notes.md
+            echo "- No iOS changes since ${PREV_TAG:-initial release}" > notes.md
           fi
 
+          printf '\nBuilt with Muxy SDK %s.\n' "$SDK_VERSION" >> notes.md
+
           gh release create "ios-v$VERSION" \
-            --repo "${{ github.repository }}" \
+            --repo "$REPOSITORY" \
             --title "iOS v$VERSION" \
             --notes-file notes.md \
             --latest=false \
-            --target "${{ github.sha }}"
+            --target "$TARGET_SHA"

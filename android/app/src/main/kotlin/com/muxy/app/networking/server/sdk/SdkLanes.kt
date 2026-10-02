@@ -1,0 +1,46 @@
+package com.muxy.app.networking.server.sdk
+
+import com.muxy.app.core.logging.Log
+import com.muxy.app.networking.server.ServerFailure
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class SdkLanes(
+    dispatcher: CoroutineDispatcher = Dispatchers.IO,
+) {
+    private val requests = dispatcher.limitedParallelism(1, "muxy.sdk.requests")
+    private val files = dispatcher.limitedParallelism(1, "muxy.sdk.files")
+    private val git = dispatcher.limitedParallelism(1, "muxy.sdk.git")
+    private val inputLane = dispatcher.limitedParallelism(1, "muxy.sdk.input")
+    private val input = CoroutineScope(SupervisorJob() + inputLane)
+    private val closing = CoroutineScope(SupervisorJob() + inputLane)
+
+    suspend fun <T> request(work: () -> T): T = withContext(requests) { work() }
+
+    suspend fun <T> fileRequest(work: () -> T): T = withContext(files) { work() }
+
+    suspend fun <T> gitRequest(work: () -> T): T = withContext(git) { work() }
+
+    fun send(work: () -> Unit) {
+        input.launch {
+            try {
+                work()
+            } catch (error: Exception) {
+                Log.terminal.error("Terminal input failed: ${ServerFailure.from(error)}")
+            }
+        }
+    }
+
+    fun closeAfterInput(handle: AutoCloseable) {
+        closing.launch { handle.close() }
+    }
+
+    fun close() {
+        input.cancel()
+    }
+}

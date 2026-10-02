@@ -1,0 +1,74 @@
+import AVFoundation
+import SwiftUI
+
+struct QRScannerView: View {
+    let onScan: (String) -> Void
+    let onCancel: () -> Void
+
+    @Environment(\.appTheme) private var theme
+    @State private var authorization = AVCaptureDevice.authorizationStatus(for: .video)
+
+    var body: some View {
+        NavigationStack {
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.groupedBackground)
+                .screenTitle("Scan QR Code")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", action: onCancel)
+                    }
+                }
+        }
+        .task { await requestAccessIfNeeded() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch authorization {
+        case .authorized:
+            ScannerRepresentable(onCode: onScan)
+            .ignoresSafeArea(edges: .bottom)
+        case .notDetermined:
+            ProgressView()
+        default:
+            cameraDeniedView
+        }
+    }
+
+    private var cameraDeniedView: some View {
+        ContentUnavailableView {
+            Label("Camera Access Needed", systemImage: "camera.fill")
+                .foregroundStyle(theme.foreground)
+        } description: {
+            Text("Allow camera access in Settings to scan the pairing code on your Mac.")
+                .foregroundStyle(theme.secondaryForeground)
+        } actions: {
+            Button("Open Settings") {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+            .buttonStyle(ThemedProminentButtonStyle())
+        }
+    }
+
+    private func requestAccessIfNeeded() async {
+        guard authorization == .notDetermined else { return }
+        _ = await AVCaptureDevice.requestAccess(for: .video)
+        authorization = AVCaptureDevice.authorizationStatus(for: .video)
+    }
+}
+
+private struct ScannerRepresentable: UIViewControllerRepresentable {
+    let onCode: (String) -> Void
+
+    func makeUIViewController(context: Context) -> QRScannerController {
+        let controller = QRScannerController()
+        controller.onCode = onCode
+        return controller
+    }
+
+    func updateUIViewController(_ controller: QRScannerController, context: Context) {
+        controller.onCode = onCode
+    }
+}

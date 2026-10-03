@@ -17,6 +17,11 @@ on:
         type: choice
         default: auto
         options: [auto, internal, alpha, production]
+      changes_not_sent_for_review:
+        description: "Save changes for manual Play review submission (required after rejection)"
+        required: false
+        type: boolean
+        default: false
       skip_release_tag:
         description: "Skip the GitHub Release step"
         required: false
@@ -38,6 +43,11 @@ on:
         description: "SDK version resolved by the combined release workflow"
         required: false
         type: string
+      changes_not_sent_for_review:
+        description: "Save changes for manual Play review submission (required after rejection)"
+        required: false
+        type: boolean
+        default: false
       skip_release_tag:
         description: "Skip the GitHub Release step (caller will create the tag)"
         required: false
@@ -200,6 +210,7 @@ jobs:
           debugSymbols: release/native-debug-symbols/release/native-debug-symbols.zip
           track: ${{ needs.build-android.outputs.track }}
           status: draft
+          changesNotSentForReview: ${{ inputs.changes_not_sent_for_review }}
 
   release-tag:
     needs: [build-android, play-upload]

@@ -163,10 +163,32 @@ class PlayUploadTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.uploader.bundle_symbols(str(self.bundle), self.directory)
 
-    def test_workflow_keeps_drafts_without_review_override(self):
+    def test_workflow_keeps_drafts_with_opt_in_review_override(self):
         workflow = (ROOT / ".github/workflows/android-release.yml").read_text()
         self.assertIn("          status: draft\n", workflow)
-        self.assertNotIn("changesNotSentForReview:", workflow)
+        self.assertIn("          changesNotSentForReview: ${{ inputs.changes_not_sent_for_review }}\n", workflow)
+
+    def test_manual_review_inputs_default_off(self):
+        for path, name, count in (
+            (".github/workflows/android-release.yml", "changes_not_sent_for_review", 2),
+            (".github/workflows/release.yml", "android_changes_not_sent_for_review", 1),
+        ):
+            with self.subTest(path=path):
+                workflow = (ROOT / path).read_text()
+                declarations = workflow.split(f"      {name}:\n")[1:]
+                self.assertEqual(count, len(declarations))
+                for declaration in declarations:
+                    self.assertRegex(
+                        declaration,
+                        r"^        description: [^\n]+\n"
+                        r"        required: false\n"
+                        r"        type: boolean\n"
+                        r"        default: false\n",
+                    )
+
+    def test_combined_workflow_forwards_manual_review_override(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        self.assertIn("      changes_not_sent_for_review: ${{ inputs.android_changes_not_sent_for_review }}\n", workflow)
 
     def test_uploads_both_symbol_types_before_draft_commit(self):
         edits = self.uploader.build.return_value.edits.return_value

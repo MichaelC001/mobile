@@ -17,6 +17,11 @@ on:
         required: true
         type: boolean
         default: true
+      android_changes_not_sent_for_review:
+        description: "Save Android changes for manual Play review submission (required after rejection)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   validate:
@@ -77,6 +82,7 @@ jobs:
       version_name: ${{ needs.validate.outputs.version }}
       version_code: ${{ needs.validate.outputs.version_code }}
       sdk_version: ${{ needs.validate.outputs.sdk_version }}
+      changes_not_sent_for_review: ${{ inputs.android_changes_not_sent_for_review }}
       skip_release_tag: true
     secrets: inherit
 

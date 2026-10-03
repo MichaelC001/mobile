@@ -1,6 +1,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -60,6 +61,21 @@ class ReleaseInputsTest(unittest.TestCase):
             with self.subTest(version=version):
                 self.assertNotEqual(0, self.validate(version=version).returncode)
         self.assertNotEqual(0, self.validate(track="beta").returncode)
+
+
+class ReleaseBuildTest(unittest.TestCase):
+    def test_bundle_builds_generate_native_symbol_archive(self):
+        for path in (".github/workflows/android-release.yml", "scripts/release-android.sh"):
+            with self.subTest(path=path):
+                commands = [
+                    shlex.split(line.split("./gradlew ", 1)[1])
+                    for line in (ROOT / path).read_text().splitlines()
+                    if "./gradlew " in line
+                ]
+                bundle_commands = [command for command in commands if ":app:bundleRelease" in command]
+                self.assertTrue(bundle_commands, "No release bundle build command found")
+                for command in bundle_commands:
+                    self.assertIn(":app:mergeReleaseNativeDebugMetadata", command)
 
 
 class NdkInstallTest(unittest.TestCase):

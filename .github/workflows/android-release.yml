@@ -141,7 +141,7 @@ jobs:
           ANDROID_KEY_STORE_PASSWORD: ${{ secrets.ANDROID_KEY_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew :app:bundleRelease -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE"
+        run: ./gradlew :app:bundleRelease :app:mergeReleaseNativeDebugMetadata -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE"
 
       - name: Remove signing key
         if: always()

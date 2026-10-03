@@ -76,7 +76,7 @@ if [[ "$UPLOAD_ONLY" != true ]]; then
       ANDROID_KEY_STORE_PASSWORD="$ANDROID_KEY_STORE_PASSWORD" \
       ANDROID_KEY_ALIAS="$ANDROID_KEY_ALIAS" \
       ANDROID_KEY_PASSWORD="$ANDROID_KEY_PASSWORD" \
-      ./gradlew :app:bundleRelease -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE"
+      ./gradlew :app:bundleRelease :app:mergeReleaseNativeDebugMetadata -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE"
   )
   [[ -s "$AAB_PATH" ]] || die "AAB not found"
   [[ -s android/app/build/outputs/mapping/release/mapping.txt ]] || die "R8 mapping not found"

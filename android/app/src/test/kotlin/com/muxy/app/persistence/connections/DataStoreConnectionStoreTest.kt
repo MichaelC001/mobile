@@ -90,6 +90,47 @@ class DataStoreConnectionStoreTest {
             assertTrue(DataStoreConnectionStore(dataStore, scope).load().isEmpty())
         }
 
+    @Test
+    fun updateReplacesTheSameConnectionWithoutDuplicatingIt() =
+        runTest {
+            val store = store()
+            val original = device()
+            val other = device(name = "Other")
+            store.upsert(original)
+            store.upsert(other)
+            val edited = original.copy(host = "new.local", port = 5000)
+
+            store.update(original, edited)
+
+            assertEquals(listOf(edited, other), store.load())
+        }
+
+    @Test
+    fun updateRejectsStaleOrDeletedConnections() =
+        runTest {
+            val store = store()
+            val original = device()
+            val current = original.copy(name = "Changed elsewhere")
+            store.upsert(current)
+
+            assertTrue(runCatching { store.update(original, original.copy(host = "new.local")) }.isFailure)
+            assertEquals(listOf(current), store.load())
+            store.delete(original.id)
+            assertTrue(runCatching { store.update(original, original.copy(host = "new.local")) }.isFailure)
+            assertTrue(store.load().isEmpty())
+        }
+
+    @Test
+    fun updateCannotChangeTheConnectionIdentity() =
+        runTest {
+            val store = store()
+            val original = device()
+            store.upsert(original)
+
+            assertTrue(runCatching { store.update(original, device()) }.isFailure)
+            assertEquals(listOf(original), store.load())
+        }
+
     private fun TestScope.store(): DataStoreConnectionStore {
         val scope = scopeFor(this)
         val file = file()

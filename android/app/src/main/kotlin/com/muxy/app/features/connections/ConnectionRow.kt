@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -15,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -34,10 +37,12 @@ fun ConnectionRow(
     connection: Connection,
     onSelect: () -> Unit,
     onDelete: () -> Unit,
+    onEdit: (() -> Unit)? = null,
 ) {
     val theme = LocalAppTheme.current
     SwipeToDismissBox(
         state = rememberSwipeToDismissBoxState(),
+        modifier = Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
         enableDismissFromStartToEnd = false,
         onDismiss = { onDelete() },
         backgroundContent = {
@@ -60,6 +65,13 @@ fun ConnectionRow(
                         modifier = Modifier.size(26.dp),
                         tint = theme.foreground,
                     )
+                }
+            },
+            trailing = {
+                if (onEdit != null) {
+                    IconButton(onClick = onEdit) {
+                        Icon(painterResource(R.drawable.ic_edit), contentDescription = "Edit ${connection.name}")
+                    }
                 }
             },
             modifier =

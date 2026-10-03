@@ -8,6 +8,7 @@ struct RootView: View {
     @State private var connectionsViewModel: ConnectionsListViewModel
     @State private var path: [AppRoute] = []
     @State private var addRequest: AddConnectionRequest?
+    @State private var editingConnection: Connection?
     @State private var isShowingSettings = false
 
     init(container: AppContainer) {
@@ -32,6 +33,7 @@ struct RootView: View {
                     ConnectionsListView(
                         viewModel: connectionsViewModel,
                         onSelect: navigate(to:),
+                        onEdit: { editingConnection = $0 },
                         onAddConnection: { addRequest = AddConnectionRequest() },
                         onSettings: { isShowingSettings = true }
                     )
@@ -55,6 +57,12 @@ struct RootView: View {
                 pairingCode: request.pairingCode,
                 onAdded: didAdd
             )
+        }
+        .sheet(item: $editingConnection, onDismiss: { connectionsViewModel.load() }) { connection in
+            EditConnectionView(viewModel: container.makeEditConnectionViewModel(for: connection)) {
+                editingConnection = nil
+                connectionsViewModel.load()
+            }
         }
         .sheet(isPresented: $isShowingSettings) {
             SettingsView(settings: container.settings) {

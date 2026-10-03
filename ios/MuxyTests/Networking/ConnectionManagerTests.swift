@@ -86,6 +86,21 @@ struct ConnectionManagerTests {
         #expect(count() == 1)
     }
 
+    @Test func ensureConnectedReconnectsWhenTheSavedEndpointChanges() async {
+        let (factory, count) = successFactory()
+        let manager = ConnectionManager(makeTransport: factory)
+        var connection = device()
+        await manager.connect(to: connection, token: "t")
+
+        connection.host = "other.local"
+        connection.port = 5000
+        await manager.ensureConnected(connection: connection, token: "t")
+
+        #expect(await manager.currentState == .connected)
+        #expect(count() == 2)
+        await manager.disconnect()
+    }
+
     @Test func ensureConnectedConnectsWhenNotConnected() async {
         let (factory, count) = successFactory()
         let manager = ConnectionManager(makeTransport: factory)

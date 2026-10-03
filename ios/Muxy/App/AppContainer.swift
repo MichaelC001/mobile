@@ -76,6 +76,17 @@ final class AppContainer {
         )
     }
 
+    func makeEditConnectionViewModel(for connection: Connection) -> EditConnectionViewModel {
+        EditConnectionViewModel(
+            connection: connection,
+            store: connectionStore,
+            keychain: keychain,
+            credentials: credentials,
+            directory: directory,
+            validator: validator
+        )
+    }
+
     func makeProjectsViewModel(for connection: Connection) -> ProjectsViewModel {
         ProjectsViewModel(
             connection: connection,

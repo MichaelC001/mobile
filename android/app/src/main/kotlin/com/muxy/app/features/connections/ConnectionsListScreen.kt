@@ -14,6 +14,7 @@ import com.muxy.app.design.components.ThemedList
 import com.muxy.app.design.components.ThemedProminentButton
 import com.muxy.app.design.components.TopBarAction
 import com.muxy.app.design.components.themedSection
+import com.muxy.app.features.demo.DemoConnection
 import com.muxy.app.models.Connection
 
 private val connectionSeparatorInset = 16.dp + connectionIconSize + 16.dp
@@ -24,6 +25,7 @@ fun ConnectionsListScreen(
     onSelect: (Connection) -> Unit,
     onAddConnection: () -> Unit,
     onSettings: () -> Unit,
+    onEdit: (Connection) -> Unit,
     footer: @Composable () -> Unit = {},
 ) {
     val connections by viewModel.connections.collectAsStateWithLifecycle()
@@ -55,6 +57,7 @@ fun ConnectionsListScreen(
                     connection = connection,
                     onSelect = { onSelect(connection) },
                     onDelete = { viewModel.delete(connection) },
+                    onEdit = if (connection.id == DemoConnection.id) null else ({ onEdit(connection) }),
                 )
             }
         }

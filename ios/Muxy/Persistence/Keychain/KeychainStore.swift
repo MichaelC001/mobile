@@ -10,6 +10,7 @@ nonisolated enum KeychainSecret: String, CaseIterable, Sendable {
     case sshPassword
     case sshPrivateKey
     case sshPassphrase
+    case sshCredentials
     case sshHostKey
 }
 

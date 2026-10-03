@@ -13,6 +13,6 @@ internal fun pendingPairingRequests(
     purchasing: Flow<Boolean> = flowOf(false),
 ): Flow<AddConnectionRequest> =
     combine(requests, routes, purchasing) { request, stack, isPurchasing ->
-        val blocked = isPurchasing || stack.any { it is AppRoute.ProjectTools || it == AppRoute.Paywall }
+        val blocked = isPurchasing || stack.any { it is AppRoute.ProjectTools || it is AppRoute.EditConnection || it == AppRoute.Paywall }
         request?.takeUnless { blocked }
     }.distinctUntilChanged().filterNotNull()

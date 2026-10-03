@@ -3,6 +3,7 @@ import SwiftUI
 struct ConnectionsListView: View {
     let viewModel: ConnectionsListViewModel
     let onSelect: (Connection) -> Void
+    let onEdit: (Connection) -> Void
     let onAddConnection: () -> Void
     let onSettings: () -> Void
 
@@ -46,6 +47,25 @@ struct ConnectionsListView: View {
                     ConnectionRowView(connection: connection)
                 }
                 .buttonStyle(.plain)
+                .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                    if connection.id != DemoConnection.id {
+                        Button {
+                            onEdit(connection)
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(theme.accent)
+                    }
+                }
+                .contextMenu {
+                    if connection.id != DemoConnection.id {
+                        Button {
+                            onEdit(connection)
+                        } label: {
+                            Label("Edit Connection", systemImage: "pencil")
+                        }
+                    }
+                }
             }
             .onDelete { viewModel.delete(at: $0) }
         }

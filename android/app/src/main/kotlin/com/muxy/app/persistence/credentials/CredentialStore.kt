@@ -31,7 +31,7 @@ class SecretCredentialStore(
     }
 
     override suspend fun save(credential: ServerCredential) {
-        secrets.write(name(credential.serverId), Json.encodeToString(StoredCredential.serializer(), StoredCredential.from(credential)))
+        secrets.write(name(credential.serverId), encode(credential))
     }
 
     override suspend fun delete(serverId: String) {
@@ -43,7 +43,12 @@ class SecretCredentialStore(
         return null
     }
 
-    private fun name(serverId: String): String = "server.$serverId.credential"
+    companion object {
+        fun name(serverId: String): String = "server.$serverId.credential"
+
+        fun encode(credential: ServerCredential): String =
+            Json.encodeToString(StoredCredential.serializer(), StoredCredential.from(credential))
+    }
 }
 
 @Serializable

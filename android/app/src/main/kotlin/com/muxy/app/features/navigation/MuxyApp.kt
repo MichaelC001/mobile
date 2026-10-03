@@ -23,6 +23,7 @@ import com.muxy.app.features.addconnection.AddConnectionScreen
 import com.muxy.app.features.billing.EntitlementFooter
 import com.muxy.app.features.billing.PaywallScreen
 import com.muxy.app.features.connections.ConnectionsListScreen
+import com.muxy.app.features.editconnection.EditConnectionScreen
 import com.muxy.app.features.files.FilesModal
 import com.muxy.app.features.git.GitModal
 import com.muxy.app.features.onboarding.OnboardingScreen
@@ -108,6 +109,7 @@ private fun AppNavigation(
                         onSelect = openConnection,
                         onAddConnection = { backStack.open(AppRoute.AddConnection) },
                         onSettings = { backStack.open(AppRoute.Settings) },
+                        onEdit = { backStack.open(AppRoute.EditConnection(it.id)) },
                         footer = { EntitlementFooter(container.billing) },
                     )
                 }
@@ -129,6 +131,12 @@ private fun AppNavigation(
                             backStack.close(AppRoute.AddConnection)
                             openConnection(connection)
                         },
+                    )
+                }
+                entry<AppRoute.EditConnection>(metadata = NavigationTransitions.modal) { route ->
+                    EditConnectionScreen(
+                        viewModel = viewModel { container.makeEditConnectionViewModel(route.connectionId) },
+                        onClose = { backStack.close(route) },
                     )
                 }
                 entry<AppRoute.SshTerminal> { route ->

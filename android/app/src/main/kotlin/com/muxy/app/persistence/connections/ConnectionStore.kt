@@ -12,6 +12,15 @@ interface ConnectionStore {
     suspend fun upsert(connection: Connection)
 
     suspend fun delete(id: UUID)
+
+    suspend fun update(
+        previous: Connection,
+        connection: Connection,
+    ) {
+        check(load().firstOrNull { it.id == previous.id } == previous) { "Connection changed while editing" }
+        require(connection.id == previous.id && connection.kind == previous.kind)
+        upsert(connection)
+    }
 }
 
 fun List<Connection>.withConnection(connection: Connection): List<Connection> {

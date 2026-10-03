@@ -86,6 +86,25 @@ class PairingNavigationTest {
         }
 
     @Test
+    fun pairingWaitsUntilTheConnectionEditorCloses() =
+        runTest {
+            val root = listOf(AppRoute.Connections)
+            val editor = AppRoute.EditConnection(connectionId)
+            val stack = MutableStateFlow<List<AppRoute>>(root + editor)
+            val delivered = mutableListOf<AddConnectionRequest>()
+            backgroundScope.launch { pendingPairingRequests(inbox.request, stack).collect { delivered += it } }
+            val request = AddConnectionRequest.PairingCode("pending-code")
+            inbox.deliver(request)
+            runCurrent()
+            assertTrue(delivered.isEmpty())
+            assertTrue(editor.isModal)
+            assertEquals(com.muxy.app.networking.muxy1.ConnectionFocus.None, stack.value.connectionFocus())
+            stack.value = root
+            runCurrent()
+            assertEquals(listOf(request), delivered)
+        }
+
+    @Test
     fun onlyTheLatestQueuedPairingRequestIsDeliveredAfterToolsClose() =
         runTest {
             val stack = MutableStateFlow<List<AppRoute>>(base + tools())

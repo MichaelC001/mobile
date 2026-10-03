@@ -125,14 +125,7 @@ struct AddConnectionView: View {
     @ViewBuilder
     private var sshSections: some View {
         Section {
-            TextField("Name", text: $viewModel.name)
-                .textInputAutocapitalization(.words)
-            TextField("Host", text: $viewModel.host)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-            TextField("Port", text: $viewModel.portText)
-                .keyboardType(.numberPad)
+            ConnectionDetailsFields(name: $viewModel.name, host: $viewModel.host, portText: $viewModel.portText)
             TextField("Username", text: $viewModel.username)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -143,19 +136,12 @@ struct AddConnectionView: View {
         .disabled(viewModel.isWorking)
 
         Section {
-            Picker("Authentication", selection: $viewModel.authMethod) {
-                Text("Password").tag(SSHAuthMethod.password)
-                Text("Private Key").tag(SSHAuthMethod.privateKey)
-            }
-            if viewModel.authMethod == .password {
-                SecureField("Password", text: $viewModel.password)
-            } else {
-                TextField("Private Key", text: $viewModel.privateKey, axis: .vertical)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .lineLimit(4...8)
-                SecureField("Passphrase (optional)", text: $viewModel.passphrase)
-            }
+            SSHAuthenticationFields(
+                authMethod: $viewModel.authMethod,
+                password: $viewModel.password,
+                privateKey: $viewModel.privateKey,
+                passphrase: $viewModel.passphrase
+            )
         } header: {
             ThemedSectionHeader("Authentication")
         }
@@ -214,14 +200,7 @@ struct AddConnectionView: View {
 
     private var manualSection: some View {
         Section {
-            TextField("Name", text: $viewModel.name)
-                .textInputAutocapitalization(.words)
-            TextField("Host", text: $viewModel.host)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-            TextField("Port", text: $viewModel.portText)
-                .keyboardType(.numberPad)
+            ConnectionDetailsFields(name: $viewModel.name, host: $viewModel.host, portText: $viewModel.portText)
         } header: {
             ThemedSectionHeader("Mac")
         }

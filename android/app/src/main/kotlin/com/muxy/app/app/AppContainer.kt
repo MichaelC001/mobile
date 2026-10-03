@@ -19,6 +19,8 @@ import com.muxy.app.features.billing.GooglePlayBilling
 import com.muxy.app.features.billing.SecretTrialStore
 import com.muxy.app.features.connections.ConnectionsListViewModel
 import com.muxy.app.features.demo.syncDemoMode
+import com.muxy.app.features.editconnection.ConnectionEditor
+import com.muxy.app.features.editconnection.EditConnectionViewModel
 import com.muxy.app.features.legacyimport.AndroidLegacyStorage
 import com.muxy.app.features.legacyimport.LegacyImporter
 import com.muxy.app.features.navigation.AppRoute
@@ -49,7 +51,6 @@ import com.muxy.app.persistence.credentials.SecretCredentialStore
 import com.muxy.app.persistence.preferencesDataStore
 import com.muxy.app.persistence.secrets.EncryptedSecretStore
 import com.muxy.app.persistence.secrets.KeystoreSecretCipher
-import com.muxy.app.persistence.secrets.SecretStore
 import com.muxy.app.persistence.secrets.SecretTokenStore
 import com.muxy.app.persistence.secrets.TokenStore
 import com.muxy.app.persistence.settings.DataStoreSettingsStore
@@ -94,7 +95,7 @@ class AppContainer(
             scope = ioScope,
         )
 
-    private val secretStore: SecretStore =
+    private val secretStore =
         EncryptedSecretStore(
             dataStore = preferencesDataStore("Secrets", ioScope) { File(context.noBackupFilesDir, SECRETS_FILE) },
             cipher = KeystoreSecretCipher(),
@@ -178,6 +179,14 @@ class AppContainer(
 
     fun makeConnectionsListViewModel(): ConnectionsListViewModel =
         ConnectionsListViewModel(connectionStore, tokenStore, credentialStore, serverDirectory)
+
+    fun makeEditConnectionViewModel(connectionId: UUID): EditConnectionViewModel =
+        EditConnectionViewModel(
+            connectionId,
+            connectionStore,
+            ConnectionEditor(connectionStore, credentialStore, secretStore, serverDirectory),
+            validator,
+        )
 
     fun makeAddConnectionViewModel(): AddConnectionViewModel =
         AddConnectionViewModel(

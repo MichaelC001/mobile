@@ -48,8 +48,9 @@ struct ConnectionInputValidator: Sendable {
             return .failure(endpointError(name: name, host: host, portText: portText))
         }
 
-        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedUsername.isEmpty else { return .failure(.emptyUsername) }
+        guard case let .success(config) = validateSSHConfig(username: username, authMethod: authMethod) else {
+            return .failure(.emptyUsername)
+        }
 
         switch authMethod {
         case .password:
@@ -64,12 +65,18 @@ struct ConnectionInputValidator: Sendable {
                 name: endpoint.name,
                 host: endpoint.host,
                 port: endpoint.port,
-                username: trimmedUsername,
+                username: config.username,
                 authMethod: authMethod,
                 secret: secret,
                 passphrase: trimmedPassphrase.isEmpty ? nil : passphrase
             )
         )
+    }
+
+    func validateSSHConfig(username: String, authMethod: SSHAuthMethod) -> Result<SSHConfig, ConnectionInputError> {
+        let trimmedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedUsername.isEmpty else { return .failure(.emptyUsername) }
+        return .success(SSHConfig(username: trimmedUsername, authMethod: authMethod))
     }
 
     func isValidHost(_ host: String) -> Bool {

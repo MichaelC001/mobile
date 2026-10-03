@@ -43,6 +43,18 @@ class DataStoreConnectionStore(
         edit { it.withConnection(connection) }
     }
 
+    override suspend fun update(
+        previous: Connection,
+        connection: Connection,
+    ) {
+        require(connection.id == previous.id && connection.kind == previous.kind)
+        dataStore.edit { preferences ->
+            val saved = preferences.connections()
+            check(saved.firstOrNull { it.id == previous.id } == previous) { "Connection changed while editing" }
+            preferences.writeConnections(saved.withConnection(connection))
+        }
+    }
+
     override suspend fun delete(id: UUID) {
         edit { connections -> connections.filterNot { it.id == id } }
     }

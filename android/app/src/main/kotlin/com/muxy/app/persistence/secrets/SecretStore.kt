@@ -11,6 +11,13 @@ interface SecretStore {
     suspend fun delete(name: String)
 }
 
+fun interface SecretUpdating {
+    suspend fun update(
+        values: Map<String, String?>,
+        commit: suspend () -> Unit,
+    )
+}
+
 interface SecretCipher {
     fun seal(
         plaintext: ByteArray,

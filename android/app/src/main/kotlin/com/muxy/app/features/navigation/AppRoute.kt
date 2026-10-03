@@ -27,6 +27,11 @@ sealed interface AppRoute : NavKey {
     data object AddConnection : AppRoute
 
     @Serializable
+    data class EditConnection(
+        val connectionId: UUID,
+    ) : AppRoute
+
+    @Serializable
     data class Projects(
         val connectionId: UUID,
     ) : AppRoute
@@ -69,7 +74,7 @@ sealed interface AppRoute : NavKey {
     ) : AppRoute
 
     val isModal: Boolean
-        get() = this == AddConnection || this == Settings || this == Paywall || this is ProjectTools
+        get() = this == AddConnection || this is EditConnection || this == Settings || this == Paywall || this is ProjectTools
 }
 
 fun List<AppRoute>.connectionFocus(): ConnectionFocus =
@@ -82,7 +87,7 @@ fun List<AppRoute>.connectionFocus(): ConnectionFocus =
             ConnectionFocus.Device(top.connectionId)
         }
 
-        AppRoute.Connections, is AppRoute.Server, is AppRoute.SshTerminal, null -> {
+        AppRoute.Connections, is AppRoute.EditConnection, is AppRoute.Server, is AppRoute.SshTerminal, null -> {
             ConnectionFocus.None
         }
 

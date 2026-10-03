@@ -69,23 +69,41 @@ fun LazyListScope.sshSections(
             )
         }
     }
-    sshAuthenticationFields(model, enabled)
+    sshAuthenticationFields(
+        authMethod = model.authMethod,
+        onAuthMethodChange = { model.authMethod = it },
+        password = model.password,
+        onPasswordChange = { model.password = it },
+        privateKey = model.privateKey,
+        onPrivateKeyChange = { model.privateKey = it },
+        passphrase = model.passphrase,
+        onPassphraseChange = { model.passphrase = it },
+        enabled = enabled,
+    )
 }
 
-private fun LazyListScope.sshAuthenticationFields(
-    model: AddConnectionViewModel,
+fun LazyListScope.sshAuthenticationFields(
+    authMethod: SshAuthMethod,
+    onAuthMethodChange: (SshAuthMethod) -> Unit,
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    privateKey: String,
+    onPrivateKeyChange: (String) -> Unit,
+    passphrase: String,
+    onPassphraseChange: (String) -> Unit,
     enabled: Boolean,
+    showCredentials: Boolean = true,
 ) {
     item(key = "ssh-authentication-header") { ThemedSectionHeader("Authentication") }
     item(key = "ssh-authentication") {
-        ThemedCell(RowPosition.FIRST) {
+        ThemedCell(if (showCredentials) RowPosition.FIRST else RowPosition.SINGLE) {
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 SshAuthMethod.entries.forEachIndexed { index, method ->
                     SegmentedButton(
-                        selected = model.authMethod == method,
-                        onClick = { model.authMethod = method },
+                        selected = authMethod == method,
+                        onClick = { onAuthMethodChange(method) },
                         shape = SegmentedButtonDefaults.itemShape(index, SshAuthMethod.entries.size),
-                        enabled = enabled,
+                        enabled = enabled && showCredentials,
                         icon = {},
                     ) {
                         Text(if (method == SshAuthMethod.PASSWORD) "Password" else "Private Key")
@@ -94,12 +112,13 @@ private fun LazyListScope.sshAuthenticationFields(
             }
         }
     }
-    if (model.authMethod == SshAuthMethod.PASSWORD) {
+    if (!showCredentials) return
+    if (authMethod == SshAuthMethod.PASSWORD) {
         item(key = "ssh-password") {
             ThemedCell(RowPosition.LAST) {
                 ThemedTextField(
-                    value = model.password,
-                    onValueChange = { model.password = it },
+                    value = password,
+                    onValueChange = onPasswordChange,
                     label = "Password",
                     enabled = enabled,
                     visualTransformation = PasswordVisualTransformation(),
@@ -117,8 +136,8 @@ private fun LazyListScope.sshAuthenticationFields(
     item(key = "ssh-private-key") {
         ThemedCell(RowPosition.MIDDLE) {
             ThemedTextField(
-                value = model.privateKey,
-                onValueChange = { model.privateKey = it },
+                value = privateKey,
+                onValueChange = onPrivateKeyChange,
                 label = "Private Key",
                 enabled = enabled,
                 singleLine = false,
@@ -131,8 +150,8 @@ private fun LazyListScope.sshAuthenticationFields(
     item(key = "ssh-passphrase") {
         ThemedCell(RowPosition.LAST) {
             ThemedTextField(
-                value = model.passphrase,
-                onValueChange = { model.passphrase = it },
+                value = passphrase,
+                onValueChange = onPassphraseChange,
                 label = "Passphrase (optional)",
                 enabled = enabled,
                 visualTransformation = PasswordVisualTransformation(),

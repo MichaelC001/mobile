@@ -10,6 +10,7 @@ actor ConnectionManager {
 
     private var client: MuxyClient?
     private var connectedDeviceID: Connection.ID?
+    private var connectedEndpoint: Endpoint?
     private var clientID: UUID?
     private var state: ConnectionState = .idle {
         didSet { broadcast(state) }
@@ -115,12 +116,13 @@ actor ConnectionManager {
         }
 
         connectedDeviceID = connection.id
+        connectedEndpoint = connection.endpoint
         state = .connected
         return status
     }
 
     func ensureConnected(connection: Connection, token: String) async {
-        if connectedDeviceID == connection.id, case .connected = state { return }
+        if connectedDeviceID == connection.id, connectedEndpoint == connection.endpoint, case .connected = state { return }
         await connect(to: connection, token: token)
     }
 
@@ -133,6 +135,7 @@ actor ConnectionManager {
                 let result = try await demoBackend.authenticate()
                 captureAuthResult(result)
                 connectedDeviceID = connection.id
+                connectedEndpoint = connection.endpoint
                 state = .connected
             } catch {
                 state = .failed(.authenticationFailed)
@@ -160,6 +163,7 @@ actor ConnectionManager {
             let result = try await client.request(.authenticateDevice, params: params)
             captureAuthResult(result)
             connectedDeviceID = connection.id
+            connectedEndpoint = connection.endpoint
             state = .connected
         } catch {
             await teardownClient()
@@ -176,6 +180,7 @@ actor ConnectionManager {
     func disconnect() async {
         await teardownClient()
         connectedDeviceID = nil
+        connectedEndpoint = nil
         clientID = nil
         state = .disconnected
     }

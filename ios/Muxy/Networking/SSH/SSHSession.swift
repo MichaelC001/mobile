@@ -48,7 +48,7 @@ actor SSHSession {
         state = .connecting
 
         do {
-            let method = try makeAuthentication()
+            let method = try await makeAuthentication()
             let validator = SSHHostKeyValidator.custom(TOFUHostKeyValidator(connectionID: connection.id, keychain: keychain))
             let client = try await SSHClient.connect(
                 host: connection.host,
@@ -175,14 +175,10 @@ actor SSHSession {
         closeContinuation = nil
     }
 
-    private func makeAuthentication() throws -> SSHAuthenticationMethod {
+    private func makeAuthentication() async throws -> SSHAuthenticationMethod {
         guard let config = connection.sshConfig else { throw SSHError.missingCredentials }
-        let secretKind: KeychainSecret = config.authMethod == .password ? .sshPassword : .sshPrivateKey
-        guard let secret = (try? keychain.secret(secretKind, for: connection.id)) ?? nil else {
-            throw SSHError.missingCredentials
-        }
-        let passphrase = (try? keychain.secret(.sshPassphrase, for: connection.id)) ?? nil
-        return try SSHAuthenticationFactory.make(config: config, secret: secret, passphrase: passphrase)
+        let credentials = try await keychain.sshCredentials(for: connection.id, authMethod: config.authMethod)
+        return try SSHAuthenticationFactory.make(config: config, secret: credentials.secret, passphrase: credentials.passphrase)
     }
 
     private func mapped(_ error: Error) -> SSHError {

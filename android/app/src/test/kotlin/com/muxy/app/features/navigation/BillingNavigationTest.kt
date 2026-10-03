@@ -22,12 +22,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BillingNavigationTest {
-    private val connections = ConnectionKind.entries.map { device().copy(kind = it, serverId = "server") } + DemoConnection.connection
+    private val realConnections = ConnectionKind.entries.map { device().copy(kind = it, serverId = "server") }
     private val entitlements = listOf(Entitlement.Loading, Entitlement.Trial(1), Entitlement.Expired, Entitlement.Unlocked)
+    private val enforcedModes = listOf(BillingEnforcement(isDebug = false), BillingEnforcement(isDebug = true, debugEnforced = true))
 
     @Test
-    fun everyConnectionKindAndDemoUseTheSameGateForEveryEntitlement() {
-        for (connection in connections) {
+    fun everyRealConnectionKindUsesTheSameGateForEveryEntitlement() {
+        for (connection in realConnections) {
             for (entitlement in entitlements) {
                 val stack = NavBackStack<AppRoute>(AppRoute.Connections)
                 stack.openConnection(connection, BillingEnforcement(isDebug = false), entitlement)
@@ -47,8 +48,41 @@ class BillingNavigationTest {
     }
 
     @Test
+    fun demoOpensForEveryEntitlementWithoutDuplicatingItsRoute() {
+        for (enforcement in enforcedModes) {
+            for (entitlement in entitlements) {
+                val stack = NavBackStack<AppRoute>(AppRoute.Connections)
+                repeat(2) {
+                    stack.openConnection(DemoConnection.connection, enforcement, entitlement)
+                }
+                assertEquals(listOf(AppRoute.Connections, AppRoute.Projects(DemoConnection.id)), stack.toList())
+            }
+        }
+    }
+
+    @Test
+    fun openingDemoDoesNotUnlockRealOrLookalikeConnections() {
+        val connections =
+            realConnections +
+                listOf(
+                    device(name = DemoConnection.NAME, host = DemoConnection.connection.host),
+                    DemoConnection.connection.copy(kind = ConnectionKind.SERVER, serverId = "server"),
+                    DemoConnection.connection.copy(kind = ConnectionKind.SSH),
+                )
+        for (enforcement in enforcedModes) {
+            for (connection in connections) {
+                val stack = NavBackStack<AppRoute>(AppRoute.Connections)
+                stack.openConnection(DemoConnection.connection, enforcement, Entitlement.Expired)
+                stack.close(AppRoute.Projects(DemoConnection.id))
+                stack.openConnection(connection, enforcement, Entitlement.Expired)
+                assertEquals(listOf(AppRoute.Connections, AppRoute.Paywall), stack.toList())
+            }
+        }
+    }
+
+    @Test
     fun unenforcedDebugOpensEveryConnectionEvenAfterExpiry() {
-        for (connection in connections) {
+        for (connection in realConnections + DemoConnection.connection) {
             val stack = NavBackStack<AppRoute>(AppRoute.Connections)
             stack.openConnection(connection, BillingEnforcement(isDebug = true), Entitlement.Expired)
             assertTrue(stack.last() != AppRoute.Paywall)
@@ -58,7 +92,7 @@ class BillingNavigationTest {
 
     @Test
     fun postPairOpeningAndRepeatedTapsCannotBypassOrDuplicateThePaywall() {
-        for (connection in connections) {
+        for (connection in realConnections) {
             val stack = NavBackStack(AppRoute.Connections, AppRoute.AddConnection)
             stack.close(AppRoute.AddConnection)
             repeat(2) {

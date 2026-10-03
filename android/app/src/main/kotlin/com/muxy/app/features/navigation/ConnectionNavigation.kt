@@ -4,6 +4,7 @@ import androidx.navigation3.runtime.NavBackStack
 import com.muxy.app.core.logging.Log
 import com.muxy.app.features.billing.BillingEnforcement
 import com.muxy.app.features.billing.Entitlement
+import com.muxy.app.features.demo.DemoConnection
 import com.muxy.app.models.Connection
 import com.muxy.app.models.ConnectionKind
 
@@ -12,7 +13,8 @@ internal fun NavBackStack<AppRoute>.openConnection(
     enforcement: BillingEnforcement,
     entitlement: Entitlement,
 ) {
-    if (enforcement.gates(entitlement)) {
+    val isDemo = connection.id == DemoConnection.id && connection.kind == ConnectionKind.DEVICE
+    if (!isDemo && enforcement.gates(entitlement)) {
         open(AppRoute.Paywall)
         return
     }

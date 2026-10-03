@@ -125,7 +125,7 @@ JVM tests use saved JSON fixtures. Instrumented tests create SQLite and real And
 
 ## Trial and unlock
 
-The 3-day trial starts on the first app launch after installation, before adding any connections. Its timestamp is kept in encrypted, non-backed-up storage and isn't reset by restarting, updating, or pairing. Once expired, opening any connection, including SSH and demo, shows the paywall. The one-time Google Play product `muxy_unlock` restores access; pending purchases do not unlock.
+The 3-day trial starts on the first app launch after installation, before adding any connections. Its timestamp is kept in encrypted, non-backed-up storage and isn't reset by restarting, updating, or pairing. Once expired, opening a real Muxy or SSH connection shows the paywall. The built-in Demo Desktop remains available without a purchase, including after trial expiry. The one-time Google Play product `muxy_unlock` restores access to real connections; pending purchases do not unlock.
 
 Billing is enforced in release builds. Debug builds bypass it unless you enable the visual-test overrides:
 
@@ -141,9 +141,23 @@ ORG_GRADLE_PROJECT_muxyTrialMinutes=2 \
 android/scripts/run.sh
 ```
 
-Install that APK and launch it yourself. A fresh installation shows “Trial: 1 day left” immediately, without pairing; after two minutes, the next minute tick or connection tap detects expiry. The footer opens trial details, Unlock, and Restore purchase. Reinstalling or clearing app data deletes the saved trial and connections. Release builds ignore both overrides and always use three days.
+Install that APK and launch it yourself. A fresh installation shows “Trial: 1 day left” immediately, without pairing; after two minutes, the next minute tick or connection tap detects expiry. The footer opens trial details, Unlock, and Restore purchase. After expiry, verify that Demo Desktop still opens its sample projects and tools, while real connections show the paywall even with Demo Mode enabled. Reinstalling or clearing app data deletes the saved trial and connections. Release builds ignore both overrides and always use three days.
 
 Real purchase, cancellation, pending payment, and restore testing requires the active `muxy_unlock` product, a Play test track, and a signed-in license tester. Debug-only enforcement does not simulate Play purchases. On startup and foreground return, the app queries Play purchases; a successful refresh never re-locks an unlocked running app. Unacknowledged purchases are retried every minute and on later purchase queries.
+
+## Google Play review access
+
+For a submission containing permanent demo access, provide these English instructions in Play Console under **App content > App access (Sign-in details)**:
+
+1. Launch Muxy. If onboarding appears, tap **Skip** in the top-right corner.
+2. On **Connections**, tap the **Settings** gear in the top-left corner.
+3. Turn on **Demo Mode**, then close Settings using the **X** button.
+4. Tap **Demo Desktop**.
+5. Open **Muxy** or **Web App** to explore the sample workspaces, terminal, files, worktrees, and Git tools.
+
+No username, password, PIN, QR code, external account, desktop, or server is required for Demo Mode. The local demo is available to every user, reusable offline in any location, and does not expire or require a purchase. Its terminal is explicitly simulated: commands are not executed on a real computer.
+
+These instructions cover the sample experience, not live Muxy or SSH connections. Live functionality still requires remote credentials and an active trial or purchase; do not describe all functionality as unrestricted. If Google requires live remote access, provide a maintained, isolated review server and access instructions through Play Console. Demo instructions alone do not guarantee approval. Save the access instructions and send the updated submission for review from **Publishing overview**.
 
 ## Connect to Muxy 1
 

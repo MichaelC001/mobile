@@ -91,7 +91,6 @@ def upload(aab_path: str, package_name: str, track: str, json_key: str, mapping:
         edits.commit(
             packageName=package_name,
             editId=edit_id,
-            changesNotSentForReview=(track == "production"),
         ).execute()
 
         print(f"Uploaded {aab_path} to {package_name} on track '{track}' as draft.")

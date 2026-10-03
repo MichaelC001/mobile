@@ -163,11 +163,16 @@ class PlayUploadTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.uploader.bundle_symbols(str(self.bundle), self.directory)
 
+    def test_workflow_keeps_drafts_without_review_override(self):
+        workflow = (ROOT / ".github/workflows/android-release.yml").read_text()
+        self.assertIn("          status: draft\n", workflow)
+        self.assertNotIn("changesNotSentForReview:", workflow)
+
     def test_uploads_both_symbol_types_before_draft_commit(self):
         edits = self.uploader.build.return_value.edits.return_value
         edits.insert.return_value.execute.return_value = {"id": "edit"}
         edits.bundles.return_value.upload.return_value.execute.return_value = {"versionCode": 1788620581}
-        for track in ("internal", "production"):
+        for track in ("internal", "alpha", "production"):
             edits.reset_mock()
             result = self.uploader.upload("app.aab", "com.muxy.app", track, "key.json", Path("mapping.txt"), Path("symbols.zip"))
             self.assertEqual(0, result)
@@ -176,7 +181,7 @@ class PlayUploadTest(unittest.TestCase):
             self.assertTrue(all(call.kwargs["apkVersionCode"] == 1788620581 for call in calls))
             release = edits.tracks.return_value.update.call_args.kwargs["body"]["releases"][0]
             self.assertEqual({"status": "draft", "versionCodes": ["1788620581"]}, release)
-            self.assertEqual(track == "production", edits.commit.call_args.kwargs["changesNotSentForReview"])
+            edits.commit.assert_called_once_with(packageName="com.muxy.app", editId="edit")
             names = [call[0] for call in edits.mock_calls]
             self.assertLess(names.index("deobfuscationfiles().upload"), names.index("commit"))
 

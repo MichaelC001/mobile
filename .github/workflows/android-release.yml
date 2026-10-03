@@ -200,7 +200,6 @@ jobs:
           debugSymbols: release/native-debug-symbols/release/native-debug-symbols.zip
           track: ${{ needs.build-android.outputs.track }}
           status: draft
-          changesNotSentForReview: ${{ needs.build-android.outputs.track == 'production' }}
 
   release-tag:
     needs: [build-android, play-upload]

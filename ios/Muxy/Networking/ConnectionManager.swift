@@ -105,7 +105,7 @@ actor ConnectionManager {
         }
         await client.start()
 
-        let params = AuthParams(deviceID: connection.id.uuidString, deviceName: connection.name, token: token)
+        let params = AuthParams(deviceID: connection.authenticationDeviceID ?? connection.id.uuidString, deviceName: connection.name, token: token)
         let status = await pairingService.pair(using: client, params: params, onStatus: onStatus)
 
         guard case .paired = status else {
@@ -155,7 +155,7 @@ actor ConnectionManager {
         await client.start()
         state = .authenticating
 
-        let params = AuthParams(deviceID: connection.id.uuidString, deviceName: connection.name, token: token)
+        let params = AuthParams(deviceID: connection.authenticationDeviceID ?? connection.id.uuidString, deviceName: connection.name, token: token)
         do {
             let result = try await client.request(.authenticateDevice, params: params)
             captureAuthResult(result)

@@ -151,6 +151,54 @@ struct ConnectionManagerTests {
         #expect(count() == 1)
     }
 
+    @Test(arguments: [nil, "dEADBEEF-1234-4aBc-8dEf-0123456789ab"] as [String?])
+    func connectUsesTheSavedAuthenticationIdentity(authenticationDeviceID: String?) async throws {
+        let transport = MockTransport(autoReply: Self.authReply)
+        let manager = ConnectionManager(makeTransport: { _ in transport })
+        var device = device()
+        device.authenticationDeviceID = authenticationDeviceID
+
+        await manager.connect(to: device, token: "saved-token")
+        #expect(await manager.currentState == .connected)
+        let frames = await transport.sentFrames
+        await manager.disconnect()
+
+        #expect(frames.count == 1)
+        let frame = try #require(frames.first)
+        let params = try authenticationParams(from: frame)
+        #expect(params.deviceID == (authenticationDeviceID ?? device.id.uuidString))
+        #expect(params.token == "saved-token")
+    }
+
+    @Test(arguments: [nil, "dEADBEEF-1234-4aBc-8dEf-0123456789ab"] as [String?])
+    func pairingUsesTheSavedAuthenticationIdentity(authenticationDeviceID: String?) async throws {
+        let transport = MockTransport(autoReply: Self.authReply)
+        let manager = ConnectionManager(makeTransport: { _ in transport })
+        var device = device()
+        device.authenticationDeviceID = authenticationDeviceID
+
+        let status = await manager.beginPairing(connection: device, token: "saved-token") { _ in }
+        let frames = await transport.sentFrames
+        await manager.disconnect()
+
+        guard case .paired = status else { Issue.record("Expected paired"); return }
+        #expect(frames.count == 1)
+        let frame = try #require(frames.first)
+        let params = try authenticationParams(from: frame)
+        #expect(params.deviceID == (authenticationDeviceID ?? device.id.uuidString))
+        #expect(params.token == "saved-token")
+    }
+
+    private func authenticationParams(from frame: String) throws -> AuthParams {
+        let object = try #require(try JSONSerialization.jsonObject(with: Data(frame.utf8)) as? [String: Any])
+        let payload = try #require(object["payload"] as? [String: Any])
+        #expect(payload["method"] as? String == "authenticateDevice")
+        let params = try #require(payload["params"] as? [String: Any])
+        #expect(params["type"] as? String == "authenticateDevice")
+        let value = try #require(params["value"] as? [String: Any])
+        return try JSONDecoder().decode(AuthParams.self, from: JSONSerialization.data(withJSONObject: value))
+    }
+
     @Test func failedEndpointReportsFailure() async {
         let (factory, _) = successFactory()
         let manager = ConnectionManager(makeTransport: factory)

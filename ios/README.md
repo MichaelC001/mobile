@@ -116,6 +116,10 @@ scripts/release-ios.sh <version>
 
 Use a version higher than the one on the App Store. The app requires iOS 26.2 or newer.
 
+## Upgrading from iOS 2.5.1
+
+The first launch imports saved Muxy 1 pairings and SSH connections from the retired React Native app, including their Keychain credentials and SSH host fingerprints. Keep the same application identity and install over the old app without uninstalling it. Follow [upgrade-check.md](upgrade-check.md) before releasing to verify an in-place upgrade.
+
 ## Connect to Muxy 1
 
 In the macOS Muxy app, open **Settings > Mobile** and enable **Allow mobile device connection**. In the app, choose **Add Connection > Muxy 1**.

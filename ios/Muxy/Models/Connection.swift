@@ -17,6 +17,7 @@ nonisolated struct Connection: Codable, Identifiable, Sendable, Equatable, Hasha
     var discoverySource: DiscoverySource
     var sshConfig: SSHConfig?
     var serverID: String?
+    var authenticationDeviceID: String?
 
     var endpoint: Endpoint {
         Endpoint(host: host, port: port)
@@ -32,7 +33,8 @@ nonisolated struct Connection: Codable, Identifiable, Sendable, Equatable, Hasha
         serviceName: String? = nil,
         discoverySource: DiscoverySource = .manual,
         sshConfig: SSHConfig? = nil,
-        serverID: String? = nil
+        serverID: String? = nil,
+        authenticationDeviceID: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -44,6 +46,7 @@ nonisolated struct Connection: Codable, Identifiable, Sendable, Equatable, Hasha
         self.discoverySource = discoverySource
         self.sshConfig = sshConfig
         self.serverID = serverID
+        self.authenticationDeviceID = authenticationDeviceID
     }
 
     init(from decoder: Decoder) throws {
@@ -58,5 +61,6 @@ nonisolated struct Connection: Codable, Identifiable, Sendable, Equatable, Hasha
         discoverySource = try container.decode(DiscoverySource.self, forKey: .discoverySource)
         sshConfig = try container.decodeIfPresent(SSHConfig.self, forKey: .sshConfig)
         serverID = try container.decodeIfPresent(String.self, forKey: .serverID)
+        authenticationDeviceID = try container.decodeIfPresent(String.self, forKey: .authenticationDeviceID)
     }
 }

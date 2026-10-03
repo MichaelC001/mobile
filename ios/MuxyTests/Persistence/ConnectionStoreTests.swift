@@ -62,6 +62,31 @@ struct ConnectionStoreTests {
         #expect(decoded == device)
     }
 
+    @MainActor
+    @Test func migratedAuthenticationIdentitySurvivesPersistence() {
+        let store = makeStore()
+        var device = device()
+        device.authenticationDeviceID = "dEADBEEF-1234-4aBc-8dEf-0123456789ab"
+
+        store.upsert(device)
+
+        #expect(store.load() == [device])
+        #expect(store.load().first?.authenticationDeviceID == "dEADBEEF-1234-4aBc-8dEf-0123456789ab")
+    }
+
+    @Test func nativeConnectionWithoutAuthenticationIdentityStillDecodes() throws {
+        let data = Data("""
+        {"id":"a1234567-89ab-4cde-8fab-0123456789ab","name":"Studio","host":"studio.local",
+         "port":4865,"kind":"device","pairingState":"paired","discoverySource":"manual"}
+        """.utf8)
+
+        let connection = try JSONDecoder().decode(Connection.self, from: data)
+
+        #expect(connection.authenticationDeviceID == nil)
+        #expect(connection.id == UUID(uuidString: "a1234567-89ab-4cde-8fab-0123456789ab"))
+        #expect(connection.pairingState == .paired)
+    }
+
     @Test func deviceWithoutServiceNameRoundTrips() throws {
         var device = device()
         device.serviceName = nil

@@ -48,6 +48,13 @@ final class AppContainer {
         self.connectionManager = connectionManager
     }
 
+    static func live() -> AppContainer {
+        let connections = UserDefaultsConnectionStore()
+        let keychain = KeychainTokenStore()
+        LegacyConnectionImporter(storage: IOSLegacyStorage(), connections: connections, keychain: keychain).run()
+        return AppContainer(connectionStore: connections, keychain: keychain)
+    }
+
     func makeConnectionsListViewModel() -> ConnectionsListViewModel {
         ConnectionsListViewModel(store: connectionStore, keychain: keychain, credentials: credentials, directory: directory)
     }

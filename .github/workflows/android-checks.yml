@@ -50,3 +50,9 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: ./gradlew :app:assembleDebug
+
+      - name: Check minified release APK
+        working-directory: android
+        run: |
+          ./gradlew :app:assembleRelease
+          scripts/check-release.sh app/build/outputs/apk/release/app-release-unsigned.apk

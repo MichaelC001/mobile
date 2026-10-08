@@ -2,7 +2,6 @@ package com.muxy.app.features.demo
 
 import com.muxy.app.core.serialization.parseUuid
 import com.muxy.app.core.serialization.uuidString
-import com.muxy.app.models.Project
 import com.muxy.app.models.Tab
 import com.muxy.app.models.TabArea
 import com.muxy.app.models.TabKind
@@ -30,6 +29,7 @@ import com.muxy.app.networking.muxy1.protocol.SelectWorktreeParams
 import com.muxy.app.networking.muxy1.protocol.TakeOverPaneParams
 import com.muxy.app.networking.muxy1.protocol.TerminalBytesEvent
 import com.muxy.app.networking.muxy1.protocol.TerminalInputParams
+import com.muxy.app.networking.muxy1.protocol.TerminalResizeParams
 import com.muxy.app.networking.muxy1.protocol.VcsProjectParams
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -47,32 +47,17 @@ data class DemoReply(
 
 class DemoBackend {
     private val mutex = Mutex()
-    private val workspaces =
-        mutableMapOf(
-            MUXY_PROJECT_ID to
-                initialWorkspace(
-                    MUXY_PROJECT_ID,
-                    MUXY_WORKTREE_ID,
-                    MUXY_AREA_ID,
-                    MUXY_PATH,
-                    Tab(MUXY_TAB_ID, TabKind.Terminal, "zsh", false, MUXY_PANE_ID),
-                ),
-            WEB_PROJECT_ID to
-                initialWorkspace(
-                    WEB_PROJECT_ID,
-                    WEB_WORKTREE_ID,
-                    WEB_AREA_ID,
-                    WEB_PATH,
-                    Tab(WEB_TAB_ID, TabKind.Terminal, "dev", false, WEB_PANE_ID),
-                ),
-        )
+    private val seeds = DemoCatalog.projects
+    private val projects = seeds.map { it.project }
+    private val workspaces = seeds.associate { it.project.id to initialWorkspace(it) }.toMutableMap()
+    private val paneScreens =
+        seeds
+            .flatMap { it.tabs }
+            .mapNotNull { seed -> seed.tab.paneId?.let { it to seed.screen } }
+            .toMap()
     private var tabCounter = 2
     private val shell = DemoShell()
-    private val tools =
-        projects.associate { project ->
-            val primaryId = if (project.id == MUXY_PROJECT_ID) MUXY_WORKTREE_ID else WEB_WORKTREE_ID
-            project.id to DemoProjectTools(project, primaryId, project.id == WEB_PROJECT_ID)
-        }
+    private val tools = seeds.associate { it.project.id to DemoProjectTools(it.project, it.worktreeId, it.git, it.files) }
 
     val clientId: UUID = CLIENT_ID
 
@@ -122,7 +107,11 @@ class DemoBackend {
                     terminalInput(decode(TerminalInputParams.serializer(), params))
                 }
 
-                Method.RELEASE_PANE, Method.SET_CLIENT_THEME, Method.TERMINAL_RESIZE, Method.TERMINAL_SCROLL -> {
+                Method.TERMINAL_RESIZE -> {
+                    terminalResize(decode(TerminalResizeParams.serializer(), params))
+                }
+
+                Method.RELEASE_PANE, Method.SET_CLIENT_THEME, Method.TERMINAL_SCROLL -> {
                     DemoReply(ok())
                 }
 
@@ -159,15 +148,32 @@ class DemoBackend {
     private fun takeOverPane(params: TakeOverPaneParams): DemoReply {
         val paneId = uuid(params.paneId)
         val ownership = PaneOwnershipEvent(paneId, PaneOwner.Remote(clientId, DEMO_DEVICE_NAME))
-        val snapshot = TerminalBytesEvent(paneId, shell.open(paneId).toByteArray())
+        val screen = paneScreens[paneId] ?: DemoTerminalScreen.SHELL
+        val contents = if (screen == DemoTerminalScreen.SHELL) shell.open(paneId) else screen.render(params.cols, params.rows)
         return DemoReply(
             ok(),
             listOf(
                 EventEnvelope(EventName.PANE_OWNERSHIP_CHANGED, RawTagged.of(EventType.PANE_OWNERSHIP, ownership)),
-                EventEnvelope(EventName.TERMINAL_SNAPSHOT, RawTagged.of(EventType.TERMINAL_SNAPSHOT, snapshot)),
+                snapshotEvent(paneId, contents),
             ),
         )
     }
+
+    private fun terminalResize(params: TerminalResizeParams): DemoReply {
+        val paneId = uuid(params.paneId)
+        val screen = paneScreens[paneId] ?: DemoTerminalScreen.SHELL
+        if (!screen.redrawsOnResize) return DemoReply(ok())
+        return DemoReply(ok(), listOf(snapshotEvent(paneId, screen.render(params.cols, params.rows))))
+    }
+
+    private fun snapshotEvent(
+        paneId: UUID,
+        contents: String,
+    ): EventEnvelope =
+        EventEnvelope(
+            EventName.TERMINAL_SNAPSHOT,
+            RawTagged.of(EventType.TERMINAL_SNAPSHOT, TerminalBytesEvent(paneId, contents.toByteArray())),
+        )
 
     private fun terminalInput(params: TerminalInputParams): DemoReply {
         val paneId = uuid(params.paneId)
@@ -245,68 +251,16 @@ class DemoBackend {
 
     private companion object {
         val CLIENT_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000101")
-        val MUXY_PROJECT_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000201")
-        val WEB_PROJECT_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000202")
-        val MUXY_WORKTREE_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000301")
-        val WEB_WORKTREE_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000302")
-        val MUXY_AREA_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000401")
-        val WEB_AREA_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000402")
-        val MUXY_TAB_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000501")
-        val WEB_TAB_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000502")
-        val MUXY_PANE_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000601")
-        val WEB_PANE_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000602")
-        val WORK_WORKSPACE_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000701")
-        val PERSONAL_WORKSPACE_ID: UUID = UUID.fromString("00000000-0000-4000-8000-000000000702")
-        const val MUXY_PATH = "/Users/demo/Projects/muxy"
-        const val WEB_PATH = "/Users/demo/Projects/web-app"
-        const val CREATED_AT = "2026-06-08T00:00:00.000Z"
         const val DEMO_DEVICE_NAME = "Android (Demo)"
-        const val PROJECTS_PARENT = "/Users/demo/Projects"
 
-        val projects =
-            listOf(
-                Project(
-                    id = MUXY_PROJECT_ID,
-                    name = "Muxy",
-                    path = MUXY_PATH,
-                    sortOrder = 0.0,
-                    createdAt = CREATED_AT,
-                    icon = "terminal",
-                    iconColor = "#22c55e",
-                    preferredWorktreeParentPath = PROJECTS_PARENT,
-                    worktreesEnabled = false,
-                    workspaceKind = "local",
-                    workspaceId = WORK_WORKSPACE_ID,
-                    workspaceName = "Work",
-                ),
-                Project(
-                    id = WEB_PROJECT_ID,
-                    name = "Web App",
-                    path = WEB_PATH,
-                    sortOrder = 1.0,
-                    createdAt = CREATED_AT,
-                    icon = "globe",
-                    iconColor = "#3b82f6",
-                    preferredWorktreeParentPath = PROJECTS_PARENT,
-                    worktreesEnabled = false,
-                    workspaceKind = "local",
-                    workspaceId = PERSONAL_WORKSPACE_ID,
-                    workspaceName = "Personal",
-                ),
+        fun initialWorkspace(seed: DemoProjectSeed): Workspace {
+            val tabs = seed.tabs.map { it.tab }
+            return Workspace(
+                projectId = seed.project.id,
+                worktreeId = seed.worktreeId,
+                focusedAreaId = seed.areaId,
+                root = WorkspaceNode.Area(TabArea(seed.areaId, seed.project.path, tabs, tabs.firstOrNull()?.id)),
             )
-
-        fun initialWorkspace(
-            projectId: UUID,
-            worktreeId: UUID,
-            areaId: UUID,
-            path: String,
-            tab: Tab,
-        ): Workspace =
-            Workspace(
-                projectId = projectId,
-                worktreeId = worktreeId,
-                focusedAreaId = areaId,
-                root = WorkspaceNode.Area(TabArea(areaId, path, listOf(tab), tab.id)),
-            )
+        }
     }
 }

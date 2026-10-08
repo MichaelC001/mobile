@@ -34,3 +34,7 @@ android/local.properties
 android/.idea/
 android/.build/
 android/MuxyMobileSDK/Installed/
+
+store/raw/
+store/composer/.build
+store/composer/.swiftpm

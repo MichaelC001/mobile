@@ -2,49 +2,25 @@ import Foundation
 
 actor DemoBackend {
     private let clientID = UUID(uuidString: "00000000-0000-4000-8000-000000000101")!
-    private let muxyProjectID = UUID(uuidString: "00000000-0000-4000-8000-000000000201")!
-    private let webProjectID = UUID(uuidString: "00000000-0000-4000-8000-000000000202")!
-    private let muxyWorktreeID = UUID(uuidString: "00000000-0000-4000-8000-000000000301")!
-    private let webWorktreeID = UUID(uuidString: "00000000-0000-4000-8000-000000000302")!
-    private let muxyAreaID = UUID(uuidString: "00000000-0000-4000-8000-000000000401")!
-    private let webAreaID = UUID(uuidString: "00000000-0000-4000-8000-000000000402")!
-    private let muxyTabID = UUID(uuidString: "00000000-0000-4000-8000-000000000501")!
-    private let webTabID = UUID(uuidString: "00000000-0000-4000-8000-000000000502")!
-    private let muxyPaneID = UUID(uuidString: "00000000-0000-4000-8000-000000000601")!
-    private let webPaneID = UUID(uuidString: "00000000-0000-4000-8000-000000000602")!
-    private let workProjectsWorkspaceID = UUID(uuidString: "00000000-0000-4000-8000-000000000701")!
-    private let personalProjectsWorkspaceID = UUID(uuidString: "00000000-0000-4000-8000-000000000702")!
+    private let seeds = DemoCatalog.projects
     private var workspaces: [UUID: Workspace] = [:]
-    private var gitStatuses: [UUID: VCSStatus] = [:]
+    private var gitStates: [UUID: DemoGitState] = [:]
     private var fileStores: [UUID: DemoFileStore] = [:]
+    private var paneScreens: [UUID: DemoTerminalScreen] = [:]
     private var pendingFileEvents: [EventEnvelope] = []
     private var tabCounter = 2
 
     init() {
-        fileStores = [
-            muxyProjectID: DemoFileStore(projectName: "Muxy"),
-            webProjectID: DemoFileStore(projectName: "Web App"),
-        ]
-        workspaces = [
-            muxyProjectID: Self.makeWorkspace(
-                projectID: muxyProjectID,
-                worktreeID: muxyWorktreeID,
-                areaID: muxyAreaID,
-                path: "/Users/demo/Projects/muxy",
-                tab: Tab(id: muxyTabID, kind: .terminal, title: "zsh", isPinned: false, paneID: muxyPaneID)
-            ),
-            webProjectID: Self.makeWorkspace(
-                projectID: webProjectID,
-                worktreeID: webWorktreeID,
-                areaID: webAreaID,
-                path: "/Users/demo/Projects/web-app",
-                tab: Tab(id: webTabID, kind: .terminal, title: "dev", isPinned: false, paneID: webPaneID)
-            )
-        ]
-        gitStatuses = [
-            muxyProjectID: Self.makeStatus(branch: "main", hasChanges: true),
-            webProjectID: Self.makeStatus(branch: "feature/native-git", hasChanges: false)
-        ]
+        for seed in seeds {
+            let projectID = seed.project.id
+            workspaces[projectID] = Self.makeWorkspace(seed)
+            gitStates[projectID] = seed.git
+            fileStores[projectID] = DemoFileStore(files: seed.files)
+            for tab in seed.tabs {
+                guard let paneID = tab.tab.paneID else { continue }
+                paneScreens[paneID] = tab.screen
+            }
+        }
     }
 
     var currentClientID: UUID { clientID }
@@ -141,27 +117,23 @@ actor DemoBackend {
         switch method {
         case .vcsRefresh:
             let params = try decode(VCSProjectParams.self, from: params)
-            return try tagged(ResultType.vcsStatus, gitStatus(for: projectID(from: params.projectID)))
+            return try tagged(ResultType.vcsStatus, gitState(for: projectID(from: params.projectID)).status)
         case .vcsCommit:
             let params = try decode(VCSCommitParams.self, from: params)
-            let projectID = try projectID(from: params.projectID)
-            gitStatuses[projectID] = Self.makeStatus(branch: gitStatus(for: projectID).branch, hasChanges: false)
+            try updateGit(projectID(from: params.projectID)) { $0.commit() }
             return try tagged(ResultType.ok, EmptyDemoResult())
         case .vcsPush, .vcsPull, .vcsMergePullRequest, .vcsRemoveWorktree:
             return try tagged(ResultType.ok, EmptyDemoResult())
         case .vcsListBranches:
             let params = try decode(VCSProjectParams.self, from: params)
-            let status = gitStatus(for: try projectID(from: params.projectID))
-            return try tagged(ResultType.vcsBranches, VCSBranches(current: status.branch, locals: ["main", "feature/native-git"], defaultBranch: "main"))
+            return try tagged(ResultType.vcsBranches, gitState(for: projectID(from: params.projectID)).branchList)
         case .vcsSwitchBranch:
             let params = try decode(VCSBranchParams.self, from: params)
-            let projectID = try projectID(from: params.projectID)
-            gitStatuses[projectID] = Self.makeStatus(branch: params.branch, hasChanges: gitStatus(for: projectID).changedFiles.isEmpty == false)
+            try updateGit(projectID(from: params.projectID)) { $0.checkout(params.branch) }
             return try tagged(ResultType.ok, EmptyDemoResult())
         case .vcsCreateBranch:
             let params = try decode(VCSCreateBranchParams.self, from: params)
-            let projectID = try projectID(from: params.projectID)
-            gitStatuses[projectID] = Self.makeStatus(branch: params.name, hasChanges: gitStatus(for: projectID).changedFiles.isEmpty == false)
+            try updateGit(projectID(from: params.projectID)) { $0.checkout(params.name) }
             return try tagged(ResultType.ok, EmptyDemoResult())
         case .vcsCreatePR:
             return try tagged(ResultType.vcsPRCreated, VCSPRCreated(url: "https://github.com/muxy-app/demo/pull/42", number: 42))
@@ -170,7 +142,8 @@ actor DemoBackend {
             return try tagged(ResultType.worktrees, worktrees(for: projectID(from: params.projectID)))
         case .vcsGetDiff:
             let params = try decode(VCSGetDiffParams.self, from: params)
-            return try tagged(ResultType.vcsDiff, Self.makeDiff(filePath: params.filePath, truncated: !params.forceFull))
+            let state = try gitState(for: projectID(from: params.projectID))
+            return try tagged(ResultType.vcsDiff, state.diff(for: params.filePath, truncated: !params.forceFull))
         default:
             return nil
         }
@@ -200,11 +173,13 @@ actor DemoBackend {
                     paneID: paneID,
                     owner: .remote(deviceID: clientID, deviceName: "iPhone (Demo)")
                 )),
-                try event(EventName.terminalSnapshot, EventType.terminalSnapshot, TerminalBytesEvent(
-                    paneID: paneID,
-                    bytes: Data(snapshotText.utf8)
-                ))
+                try snapshotEvent(paneID: paneID, cols: params.cols, rows: params.rows)
             ]
+        case .terminalResize:
+            let params = try decode(TerminalResizeParams.self, from: params)
+            let paneID = try paneID(from: params.paneID)
+            guard screen(for: paneID).redrawsOnResize else { return [] }
+            return [try snapshotEvent(paneID: paneID, cols: params.cols, rows: params.rows)]
         case .terminalInput:
             let params = try decode(TerminalInputParams.self, from: params)
             let text = String(data: params.bytes, encoding: .utf8) ?? ""
@@ -220,74 +195,45 @@ actor DemoBackend {
         }
     }
 
-    private func gitStatus(for projectID: UUID) -> VCSStatus {
-        gitStatuses[projectID] ?? Self.makeStatus(branch: "main", hasChanges: false)
+    private func gitState(for projectID: UUID) throws -> DemoGitState {
+        guard let state = gitStates[projectID] else { throw DemoError.notFound }
+        return state
     }
 
-    private func worktrees(for projectID: UUID) -> [Worktree] {
-        if projectID == webProjectID {
-            return [
-                Worktree(
-                    id: webWorktreeID,
-                    name: "Web App",
-                    path: "/Users/demo/Projects/web-app",
-                    branch: "feature/native-git",
-                    isPrimary: true,
-                    canBeRemoved: false,
-                    createdAt: "2026-06-08T00:00:00.000Z"
-                )
-            ]
-        }
+    private func updateGit(_ projectID: UUID, _ change: (inout DemoGitState) -> Void) throws {
+        var state = try gitState(for: projectID)
+        change(&state)
+        gitStates[projectID] = state
+    }
+
+    private func worktrees(for projectID: UUID) throws -> [Worktree] {
+        guard let seed = seeds.first(where: { $0.project.id == projectID }) else { throw DemoError.notFound }
         return [
             Worktree(
-                id: muxyWorktreeID,
-                name: "Muxy",
-                path: "/Users/demo/Projects/muxy",
-                branch: "main",
+                id: seed.worktreeID,
+                name: seed.project.name,
+                path: seed.project.path,
+                branch: try gitState(for: projectID).branch,
                 isPrimary: true,
                 canBeRemoved: false,
-                createdAt: "2026-06-08T00:00:00.000Z"
+                createdAt: DemoCatalog.createdAt
             )
         ]
     }
 
     private var projects: [Project] {
-        [
-            Project(
-                id: muxyProjectID,
-                name: "Muxy",
-                path: "/Users/demo/Projects/muxy",
-                sortOrder: 0,
-                createdAt: "2026-06-08T00:00:00.000Z",
-                icon: "terminal",
-                logo: nil,
-                iconColor: "#22c55e",
-                preferredWorktreeParentPath: "/Users/demo/Projects",
-                worktreesEnabled: false,
-                workspaceKind: "local",
-                workspaceID: workProjectsWorkspaceID,
-                workspaceName: "Work"
-            ),
-            Project(
-                id: webProjectID,
-                name: "Web App",
-                path: "/Users/demo/Projects/web-app",
-                sortOrder: 1,
-                createdAt: "2026-06-08T00:00:00.000Z",
-                icon: "globe",
-                logo: nil,
-                iconColor: "#3b82f6",
-                preferredWorktreeParentPath: "/Users/demo/Projects",
-                worktreesEnabled: false,
-                workspaceKind: "local",
-                workspaceID: personalProjectsWorkspaceID,
-                workspaceName: "Personal"
-            )
-        ]
+        seeds.map(\.project)
     }
 
-    private var snapshotText: String {
-        "\u{001B}[1;32mDemo Mode\u{001B}[0m - this terminal is simulated.\r\nType any command and press Enter to see the demo response.\r\ndemo@muxy ~ % "
+    private func screen(for paneID: UUID) -> DemoTerminalScreen {
+        paneScreens[paneID] ?? .shell
+    }
+
+    private func snapshotEvent(paneID: UUID, cols: Int, rows: Int) throws -> EventEnvelope {
+        try event(EventName.terminalSnapshot, EventType.terminalSnapshot, TerminalBytesEvent(
+            paneID: paneID,
+            bytes: Data(screen(for: paneID).render(cols: cols, rows: rows).utf8)
+        ))
     }
 
     private func response(for text: String) -> String {
@@ -347,50 +293,10 @@ actor DemoBackend {
         workspaces[projectID] = Workspace(projectID: projectID, worktreeID: workspace.worktreeID, focusedAreaID: areaID, root: .tabArea(updatedArea))
     }
 
-    private static func makeWorkspace(projectID: UUID, worktreeID: UUID, areaID: UUID, path: String, tab: Tab) -> Workspace {
-        let area = TabArea(id: areaID, projectPath: path, tabs: [tab], activeTabID: tab.id)
-        return Workspace(projectID: projectID, worktreeID: worktreeID, focusedAreaID: areaID, root: .tabArea(area))
-    }
-
-    private static func makeStatus(branch: String, hasChanges: Bool) -> VCSStatus {
-        VCSStatus(
-            branch: branch,
-            aheadCount: branch == "main" ? 0 : 2,
-            behindCount: 0,
-            hasUpstream: true,
-            stagedFiles: hasChanges ? [VCSFile(path: "ios/Muxy/Features/Git/GitSheetView.swift", status: .added, isUntracked: false)] : [],
-            changedFiles: hasChanges ? [VCSFile(path: "ios/Muxy/Networking/Protocol/Methods.swift", status: .modified, isUntracked: false)] : [],
-            defaultBranch: "main",
-            pullRequest: branch == "main" ? nil : VCSPullRequest(
-                url: "https://github.com/muxy-app/demo/pull/42",
-                number: 42,
-                state: "OPEN",
-                isDraft: false,
-                baseBranch: "main",
-                mergeable: true,
-                mergeStateStatus: .clean,
-                checks: VCSPRChecks(status: .success, passing: 4, failing: 0, pending: 0, total: 4),
-                headOid: nil
-            )
-        )
-    }
-
-    private static func makeDiff(filePath: String, truncated: Bool) -> VCSDiff {
-        VCSDiff(
-            filePath: filePath,
-            rows: [
-                VCSDiffRow(kind: .hunk, oldLineNumber: nil, newLineNumber: nil, text: "@@ -1,3 +1,4 @@"),
-                VCSDiffRow(kind: .context, oldLineNumber: 1, newLineNumber: 1, text: " import SwiftUI"),
-                VCSDiffRow(kind: .addition, oldLineNumber: nil, newLineNumber: 2, text: "+struct GitOverviewView: View {"),
-                VCSDiffRow(kind: .addition, oldLineNumber: nil, newLineNumber: 3, text: "+    let viewModel: GitViewModel"),
-                VCSDiffRow(kind: .deletion, oldLineNumber: 2, newLineNumber: nil, text: "-struct PlaceholderView: View {"),
-                VCSDiffRow(kind: .context, oldLineNumber: 3, newLineNumber: 4, text: " }")
-            ],
-            additions: 2,
-            deletions: 1,
-            truncated: truncated,
-            isBinary: false
-        )
+    private static func makeWorkspace(_ seed: DemoProjectSeed) -> Workspace {
+        let tabs = seed.tabs.map(\.tab)
+        let area = TabArea(id: seed.areaID, projectPath: seed.project.path, tabs: tabs, activeTabID: tabs.first?.id)
+        return Workspace(projectID: seed.project.id, worktreeID: seed.worktreeID, focusedAreaID: seed.areaID, root: .tabArea(area))
     }
 
     private func tagged<T: Encodable & Sendable>(_ type: String, _ value: T) throws -> RawTagged {

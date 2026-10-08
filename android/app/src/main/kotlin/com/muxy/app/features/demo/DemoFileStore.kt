@@ -9,8 +9,8 @@ import com.muxy.app.models.RemoteFileStat
 import java.nio.charset.CharacterCodingException
 import java.util.Base64
 
-class DemoFileStore(
-    projectName: String,
+internal class DemoFileStore(
+    files: List<DemoFile>,
 ) {
     private data class Node(
         val isDirectory: Boolean,
@@ -18,52 +18,15 @@ class DemoFileStore(
         val isIgnored: Boolean = false,
     )
 
-    private val nodes =
-        mutableMapOf(
-            "" to Node(true),
-            "Sources" to Node(true),
-            "Sources/App.swift" to
-                text(
-                    "import SwiftUI\n\nstruct HomeView: View {\n    var body: some View {\n        Text(\"Welcome to $projectName\")\n    }\n}\n",
-                ),
-            "TerminalKeyboardVisibilityConfiguration.swift" to
-                text(
-                    """
-                    import Foundation
+    private val nodes = mutableMapOf("" to Node(true))
 
-                    struct TerminalKeyboardVisibilityConfiguration {
-                        let preservesTerminalGrid: Bool
-                        let followsCursorWhenKeyboardOpens: Bool
-                        let allowsManualViewportScrolling: Bool
-                    }
+    init {
+        files.forEach { file ->
+            createParents(RemoteFilePath.parent(file.path))
+            nodes[file.path] = Node(file.isDirectory, file.data, file.isIgnored)
+        }
+    }
 
-                    let configuration = TerminalKeyboardVisibilityConfiguration(preservesTerminalGrid: true, followsCursorWhenKeyboardOpens: true, allowsManualViewportScrolling: true)
-
-                    """.trimIndent(),
-                ),
-            "README.md" to
-                text(
-                    """
-                    # $projectName
-
-                    Browse project files, make a quick edit, and return to your terminal. Files are read from the active worktree, so you can keep working wherever you are.
-
-                    ## Working with files
-
-                    Tap a folder to open it. Touch and hold a file to select it, then use the actions below to rename, move, or delete it.
-
-                    ## Reading and editing
-
-                    Long lines wrap to fit the screen. Use the wrapping control to keep code on one line, or tap Edit file to make changes. Your edits are saved only when you choose Save changes.
-
-                    """.trimIndent(),
-                ),
-            "assets" to Node(true),
-            "assets/icon.png" to Node(false, Base64.getDecoder().decode(ICON)),
-            "archive.bin" to Node(false, byteArrayOf(0xff.toByte(), 0xfe.toByte(), 0, 1)),
-            ".build" to Node(true, isIgnored = true),
-            ".build/state.json" to Node(false, "{}\n".toByteArray(), isIgnored = true),
-        )
     var changedPaths: List<String> = emptyList()
         private set
 
@@ -232,9 +195,9 @@ class DemoFileStore(
         }
     }
 
-    private companion object {
-        const val ICON = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-
-        fun text(value: String) = Node(false, value.toByteArray())
+    private fun createParents(path: String) {
+        if (path.isEmpty() || nodes.containsKey(path)) return
+        createParents(RemoteFilePath.parent(path))
+        nodes[path] = Node(true)
     }
 }

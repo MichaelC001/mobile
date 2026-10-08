@@ -10,43 +10,17 @@ nonisolated struct DemoFileStore: Sendable {
     private var nodes: [String: Node]
     private(set) var changedPaths: [String] = []
 
-    init(projectName: String) {
-        nodes = [
-            "": Node(isDirectory: true),
-            "Sources": Node(isDirectory: true),
-            "Sources/App.swift": Node(isDirectory: false, data: Data("import SwiftUI\n\nstruct HomeView: View {\n    var body: some View {\n        Text(\"Welcome to \(projectName)\")\n    }\n}\n".utf8)),
-            "TerminalKeyboardVisibilityConfiguration.swift": Node(isDirectory: false, data: Data("""
-            import Foundation
-
-            struct TerminalKeyboardVisibilityConfiguration {
-                let preservesTerminalGrid: Bool
-                let followsCursorWhenKeyboardOpens: Bool
-                let allowsManualViewportScrolling: Bool
+    init(files: [DemoFile]) {
+        var nodes = ["": Node(isDirectory: true)]
+        for file in files {
+            var parent = RemoteFilePath.parent(file.path)
+            while !parent.isEmpty, nodes[parent] == nil {
+                nodes[parent] = Node(isDirectory: true)
+                parent = RemoteFilePath.parent(parent)
             }
-
-            let configuration = TerminalKeyboardVisibilityConfiguration(preservesTerminalGrid: true, followsCursorWhenKeyboardOpens: true, allowsManualViewportScrolling: true)
-
-            """.utf8)),
-            "assets": Node(isDirectory: true),
-            "assets/icon.png": Node(isDirectory: false, data: Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=") ?? Data()),
-            "README.md": Node(isDirectory: false, data: Data("""
-            # \(projectName)
-
-            Browse project files, make a quick edit, and return to your terminal. Files are read from the active worktree, so you can keep working wherever you are.
-
-            ## Working with files
-
-            Tap a folder to open it. Touch and hold a file to select it, then use the actions below to rename, move, or delete it.
-
-            ## Reading and editing
-
-            Long lines wrap to fit the screen. Use the wrapping control to keep code on one line, or tap Edit file to make changes. Your edits are saved only when you choose Save changes.
-
-            """.utf8)),
-            ".build": Node(isDirectory: true, isIgnored: true),
-            ".build/state.json": Node(isDirectory: false, data: Data("{}\n".utf8), isIgnored: true),
-            "archive.bin": Node(isDirectory: false, data: Data([0xFF, 0xFE, 0x00, 0x01])),
-        ]
+            nodes[file.path] = Node(isDirectory: file.isDirectory, data: file.data, isIgnored: file.isIgnored)
+        }
+        self.nodes = nodes
     }
 
     static func handles(_ method: Method) -> Bool {

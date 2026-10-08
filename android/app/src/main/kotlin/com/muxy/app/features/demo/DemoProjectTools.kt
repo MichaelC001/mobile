@@ -31,10 +31,11 @@ import java.util.UUID
 internal class DemoProjectTools(
     private val project: Project,
     primaryId: UUID,
-    isWeb: Boolean,
+    gitSeed: DemoGitSeed,
+    seedFiles: List<DemoFile>,
 ) {
-    private val files = DemoFileStore(project.name)
-    private val git = DemoGitStore(isWeb)
+    private val files = DemoFileStore(seedFiles)
+    private val git = DemoGitStore(gitSeed)
     private val worktrees =
         mutableListOf(Worktree(primaryId, project.name, project.path, git.status.branch, true, false, project.createdAt))
 
